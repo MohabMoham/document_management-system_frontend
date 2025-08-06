@@ -1,167 +1,55 @@
-import React, { useEffect, useState } from 'react';
-import { BrowserRouter as Router, Routes, Route, useNavigate, Navigate } from 'react-router-dom';
-import axiosInstance from './axios';
-import LoginScreen from './pages/auth/LoginScreen';
-import RegisterScreen from './pages/auth/RegisterScreen';
+import React, { useEffect, useState, createContext, useContext } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import DocumentWorkspaceUI from './pages/home/home';
+import AuthWrapper from './pages/auth/AuthWrapper';
 
-function AuthWrapper() {
-  const navigate = useNavigate();
+// Theme Context
+export const ThemeContext = createContext({
+  isDark: false,
+  toggleTheme: () => {},
+});
 
-  // your state logic...
-  const [currentScreen, setCurrentScreen] = useState<'login' | 'register'>('login');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [rememberPassword, setRememberPassword] = useState(false);
-  const [csrfToken, setCsrfToken] = useState('');
+export const useTheme = () => useContext(ThemeContext);
 
-  const [loginData, setLoginData] = useState({ email: '', password: '' });
-  const [registerData, setRegisterData] = useState({
-    email: '',
-    password: '',
-    nationalId: '',
-    firstName: '',
-    lastName: '',
-    phone: '',
-    role: 'user'
-  });
+// Theme Provider Component
+const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [isDark, setIsDark] = useState(false);
 
   useEffect(() => {
-    const fetchCsrf = async () => {
-      try {
-        const res = await axiosInstance.get('/csrf-token');
-        setCsrfToken(res.data.csrfToken);
-      } catch (err) {
-        console.error('Failed to fetch CSRF token:', err);
-      }
-    };
-    fetchCsrf();
+    const savedTheme = localStorage.getItem("theme");
+    if (savedTheme === "dark") {
+      setIsDark(true);
+      document.documentElement.classList.add("dark");
+    }
   }, []);
 
-  const switchScreen = (screen: 'login' | 'register') => {
-    setCurrentScreen(screen);
-    setError('');
-    setSuccess('');
-    setLoading(false);
-    if (screen === 'login') {
-      setLoginData({ email: '', password: '' });
+  const toggleTheme = () => {
+    setIsDark(!isDark);
+    if (!isDark) {
+      document.documentElement.classList.add("dark");
+      localStorage.setItem("theme", "dark");
     } else {
-      setRegisterData({
-        email: '',
-        password: '',
-        nationalId: '',
-        firstName: '',
-        lastName: '',
-        phone: '',
-        role: 'user',
-      });
+      document.documentElement.classList.remove("dark");
+      localStorage.setItem("theme", "light");
     }
   };
 
-  const handleLoginSubmit = async () => {
-    setLoading(true);
-    setError('');
-    setSuccess('');
-    try {
-      const res = await axiosInstance.post(
-        '/login',
-        loginData,
-        {
-          headers: {
-            'X-CSRF-Token': csrfToken,
-          }
-        }
-      );
-      setSuccess('Login successful!');
-   
-      navigate('/home'); // ✅ redirect to home
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Invalid email or password');
-    } finally {
-      setLoading(false);
-    }
-  };
+  return <ThemeContext.Provider value={{ isDark, toggleTheme }}>{children}</ThemeContext.Provider>;
+};
 
-  const handleRegisterSubmit = async () => {
-    setLoading(true);
-    setError('');
-    setSuccess('');
-    try {
-      const res = await axiosInstance.post(
-        '/register',
-        {
-          email: registerData.email,
-          password: registerData.password,
-          national_id: registerData.nationalId,
-          first_name: registerData.firstName,
-          last_name: registerData.lastName,
-          phone: registerData.phone,
-          role: registerData.role || 'user',
-        },
-        {
-          headers: {
-            'X-CSRF-Token': csrfToken,
-          }
-        }
-      );
-      setSuccess('Registration successful! Welcome aboard!');
-    
-      navigate('/home'); // ✅ redirect to home
-    } catch (err: any) {
-      const msg = err.response?.data?.message || '';
-      if (msg.includes('email')) {
-        setError('Email already exists. Please use a different email.');
-      } else if (msg.includes('nationalId')) {
-        setError('National ID already exists. Please check your details.');
-      } else {
-        setError('Registration failed. Please try again.');
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
+// Main App Component with Theme Provider and Routing
+const App: React.FC = () => {
   return (
-    <>
-      {currentScreen === 'login' ? (
-        <LoginScreen
-          loginData={loginData}
-          setLoginData={setLoginData}
-          rememberPassword={rememberPassword}
-          setRememberPassword={setRememberPassword}
-          error={error}
-          success={success}
-          loading={loading}
-          handleLoginSubmit={handleLoginSubmit}
-          switchScreen={switchScreen}
-        />
-      ) : (
-        <RegisterScreen
-          registerData={registerData}
-          setRegisterData={setRegisterData}
-          error={error}
-          success={success}
-          loading={loading}
-          handleRegisterSubmit={handleRegisterSubmit}
-          switchScreen={switchScreen}
-        />
-      )}
-    </>
+    <ThemeProvider>
+      <Router>
+        <Routes>
+          <Route path="/" element={<AuthWrapper />} />
+          <Route path="/home" element={<DocumentWorkspaceUI />} />
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </Router>
+    </ThemeProvider>
   );
-}
-
-function App() {
- 
-  return (
-    <Router>
-      <Routes>
-        <Route path="/" element={<AuthWrapper />} />
-        <Route path="/home" element={<DocumentWorkspaceUI />} />
-        <Route path="*" element={<Navigate to="/" />} />
-      </Routes>
-    </Router>
-  );
-}
+};
 
 export default App;
